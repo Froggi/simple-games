@@ -1,0 +1,207 @@
+<html>
+<body>
+<canvas id="scene" width="500" height="500"></canvas>
+
+<script>
+var ctx
+var canvas 
+window.addEventListener('load', function() {
+    canvas = document.getElementById('scene');
+    ctx = canvas.getContext('2d');
+    init()
+
+    window.addEventListener('keydown', keyDown)
+
+    requestAnimationFrame(loop);
+});
+var lastFrame = 0;
+var maxFPS = 60;
+function loop(timestamp) {
+    //Timing, 
+    if (timestamp < lastFrame + (1000 / maxFPS)) {
+        requestAnimationFrame(loop);
+        return;
+    }
+    var deltaTime = (timestamp - lastFrame) / 1000;
+    var fps = (1/deltaTime)
+
+    lastFrame = timestamp;
+    update(deltaTime);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+var points;
+var maxPoints = 0;
+
+var snakeParts = []
+var speed = 100;
+var direction = {x: 0, y: -1}
+
+var apples = []
+var appleTimer = 0;
+function init()  {
+    points = 0;
+    
+    for(var part = 0; part < 3; part++) {
+        snakeParts.push({x: 250,y: 250+part*14})
+    }
+    appleTimer = Math.random()*5;
+}
+
+function restart() {
+    snakeParts = []
+    speed = 100;
+    direction = {x: 0, y: -1}
+    apples = []
+    maxPoints = points > maxPoints ? points : maxPoints;
+    init()
+}
+
+function keyDown(event) {
+    switch(event.keyCode) {
+        case 37: //Left
+            if(direction.x != 1)
+                direction = {x: -1, y: 0};
+            break;
+        case 38: //Up
+            if(direction.y != 1)
+                direction = {x: 0, y: -1};
+            break;
+        case 39: //Right
+            if(direction.x != -1)
+                direction = {x: 1, y: 0};
+            break;
+        case 40: //Down
+            if(direction.y != -1)
+                direction = {x: 0, y: 1};
+            break;
+    }
+}
+
+function update(deltaTime) {
+    for(var i = 0; i<snakeParts.length; i++) {
+        if(i == 0) { //Head
+            snakeParts[i].x += direction.x * speed * deltaTime;
+            snakeParts[i].y += direction.y * speed * deltaTime;
+        }else { //Body
+            var partDirection = {
+                x: (snakeParts[i-1].x - snakeParts[i].x),
+                y: (snakeParts[i-1].y - snakeParts[i].y)
+            }
+            //Normalize
+            var directionLength = Math.sqrt(Math.pow(partDirection.x,2) + Math.pow(partDirection.y,2))
+            if(directionLength < 15+speed*0.05) {
+                directionLength = 15+speed*0.05
+            }
+            partDirection.x /= directionLength;
+            partDirection.y /= directionLength;
+
+            snakeParts[i].x += partDirection.x * speed * deltaTime;
+            snakeParts[i].y += partDirection.y * speed * deltaTime;
+        }
+    }
+    appleTimer -= deltaTime;
+    if(appleTimer <= 0) {
+        apples.push({x: Math.random() * 400 + 50,y: Math.random() * 400 + 50})
+        appleTimer = Math.random()*Math.max(2, 7-snakeParts.length);
+    }
+
+    var head = snakeParts[0]
+
+    //Collision against apples
+    for(var a in apples) {
+        var lengthToApple = Math.pow(head.x - apples[a].x,2) + Math.pow(head.y - apples[a].y,2);
+        if(lengthToApple < 10*10) {
+            snakeParts.push({x: snakeParts[snakeParts.length-1].x,y: snakeParts[snakeParts.length-1].y})
+            apples.splice(a,1)
+            speed += 20
+            points++;
+            break;
+        }
+    }
+
+    //Collision against body
+    for(var i = 1; i < snakeParts.length; i++) {
+        var lengthToPart = Math.pow(head.x -snakeParts[i].x,2) + Math.pow(head.y -snakeParts[i].y,2);
+        if(lengthToPart < 5*5) {
+            restart();
+            break;
+        }
+    }
+
+    //Collision against wall
+    if(head.x < 30 || head.x > 470 || 
+        head.y < 30 || head.y > 470) {
+        restart();
+    }
+}
+
+function draw() {
+    //Background
+    ctx.fillStyle="#609b5c";
+    ctx.fillRect(0,0,canvas.width,canvas.height)
+
+    //Score
+    ctx.font = "40px Arial";
+    ctx.fillStyle="#2d6828";
+    ctx.textAlign = "center";
+    ctx.fillText(points,250,250);
+
+    if(maxPoints) {
+        ctx.font = "20px Arial";
+        ctx.fillStyle="#2d6828";
+        ctx.textAlign = "center";
+        ctx.fillText(maxPoints,250,275);
+    }
+
+    //Edges
+    ctx.fillStyle="#113d0e";
+    for(var edge = 12; edge < canvas.width; edge += canvas.width / 20) {
+        ctx.beginPath();
+        ctx.arc(edge, 12, 15, 0, Math.PI*2);
+        ctx.arc(edge, 488, 15, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(12, edge, 15, 0, Math.PI*2);
+        ctx.arc(488, edge, 15, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    //Snake
+    for(var i in snakeParts) {
+        var tailStart = Math.round(snakeParts.length * 0.70);
+        var toEnd = i > tailStart ? ((i-tailStart)/(snakeParts.length-tailStart)) : 0
+
+        if(i == 0) { //Head
+            ctx.fillStyle="#472c05";
+        }else if(i > tailStart) { //Tail
+            ctx.fillStyle="#ae7b32";
+        }else //Body
+        {
+            ctx.fillStyle="#8c5b15";
+        }
+
+        ctx.beginPath();
+        ctx.arc(snakeParts[i].x, snakeParts[i].y, 10*(1-toEnd), 0, Math.PI*2);
+        ctx.fill();
+        if(i == 0) { //Head
+            ctx.fillStyle="#FFFFFF";
+            ctx.beginPath();
+            ctx.arc(snakeParts[i].x + direction.x*8, snakeParts[i].y + direction.y*8, 4, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+
+    //Apples
+    ctx.fillStyle="#FF0000";
+    for(var a in apples) {
+        ctx.beginPath();
+        ctx.arc(apples[a].x, apples[a].y, 5, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+</script>
+</body>
+</html>
